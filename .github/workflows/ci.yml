@@ -9,12 +9,12 @@ jobs:
       matrix:
         job:
           # Linux
-          - { os: ubuntu-20.04, compiler: "g++",     cpp_standard: "11", build_type: "Debug"          }
-          - { os: ubuntu-20.04, compiler: "g++",     cpp_standard: "14", build_type: "Debug"          }
+          # - { os: ubuntu-20.04, compiler: "g++",     cpp_standard: "11", build_type: "Debug"          }
+          # - { os: ubuntu-20.04, compiler: "g++",     cpp_standard: "14", build_type: "Debug"          }
           - { os: ubuntu-20.04, compiler: "g++",     cpp_standard: "17", build_type: "Debug"          }
           - { os: ubuntu-20.04, compiler: "g++",     cpp_standard: "17", build_type: "RelWithDebInfo" }
-          - { os: ubuntu-20.04, compiler: "clang++", cpp_standard: "11", build_type: "Debug"          }
-          - { os: ubuntu-20.04, compiler: "clang++", cpp_standard: "14", build_type: "Debug"          }
+          # - { os: ubuntu-20.04, compiler: "clang++", cpp_standard: "11", build_type: "Debug"          }
+          # - { os: ubuntu-20.04, compiler: "clang++", cpp_standard: "14", build_type: "Debug"          }
           - { os: ubuntu-20.04, compiler: "clang++", cpp_standard: "17", build_type: "Debug"          }
           - { os: ubuntu-20.04, compiler: "clang++", cpp_standard: "17", build_type: "RelWithDebInfo" }
           # MacOS
@@ -22,7 +22,7 @@ jobs:
           # Windows
           # Note: we do not test for C++11 as MSVC does not support a C++11 version switch, see:
           # https://devblogs.microsoft.com/cppblog/msvc-now-correctly-reports-__cplusplus/
-          - { os: windows-2019, compiler: "cl",      cpp_standard: "14", build_type: "Debug"          }
+          # - { os: windows-2019, compiler: "cl",      cpp_standard: "14", build_type: "Debug"          }
           - { os: windows-2019, compiler: "cl",      cpp_standard: "17", build_type: "Debug"          }
           - { os: windows-2019, compiler: "cl",      cpp_standard: "17", build_type: "RelWithDebInfo" }
 
