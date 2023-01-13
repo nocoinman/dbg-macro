@@ -3,16 +3,13 @@
 #include <iostream>
 #include <list>
 #include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
-#include <tuple>
-#include <vector>
-
-#if DBG_MACRO_CXX_STANDARD >= 17
-#include <optional>
 #include <string_view>
+#include <tuple>
 #include <variant>
-#endif
+#include <vector>
 
 #include <dbg.h>
 
@@ -120,6 +117,24 @@ TEST_CASE("pretty_print") {
           "{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, ... size:14}");
   }
 
+  SECTION("container adapters") {
+    CHECK(pretty_print(std::priority_queue<int>()) == "{}");
+    CHECK(pretty_print(std::stack<int>({1, 2, 3})) == "{3, 2, 1}");
+    CHECK(pretty_print(std::queue<int>({9, 8, 7})) == "{9, 8, 7}");
+    CHECK(pretty_print(std::stack<int>(
+              {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14})) ==
+          "{14, 13, 12, 11, 10, 9, 8, 7, 6, 5, ... size:14}");
+  }
+
+  SECTION("compound container adapters") {
+    std::priority_queue<std::pair<int, int>> pq_of_pairs;
+    pq_of_pairs.push({-3, 4});
+    pq_of_pairs.push({-3, 7});
+    pq_of_pairs.push({2, -8});
+    pq_of_pairs.push({-1, 9});
+    CHECK(pretty_print(pq_of_pairs) == "{{2, -8}, {-1, 9}, {-3, 7}, {-3, 4}}");
+  }
+
   SECTION("std::string") {
     std::string x = "foo";
     std::string y = "bar";
@@ -146,7 +161,8 @@ TEST_CASE("pretty_print") {
     std::vector<std::pair<std::string, int>> vector_of_pairs = {
         {"30+2", 32}, {"30-2", 28}, {"30*2", 60}};
 
-    CHECK(pretty_print(vector_of_pairs) == "{{\"30+2\", 32}, {\"30-2\", 28}, {\"30*2\", 60}}");
+    CHECK(pretty_print(vector_of_pairs) ==
+          "{{\"30+2\", 32}, {\"30-2\", 28}, {\"30*2\", 60}}");
 
     std::tuple<std::vector<int>> tuple_with_vector{{1, 2, 3}};
     CHECK(pretty_print(tuple_with_vector) == "{{1, 2, 3}}");
@@ -245,45 +261,46 @@ TEST_CASE("type_name") {
 
   SECTION("primitive types") {
     CHECK(type_name<void>() == "void");
-    CHECK(type_name<int>() == "int");
+    CHECK(type_name<int>() == "int32_t");
     CHECK(type_name<char>() == "char");
-    CHECK(type_name<short>() == "short");
-    CHECK(type_name<long>() == "long");
-    CHECK(type_name<unsigned short>() == "unsigned short");
-    CHECK(type_name<unsigned long>() == "unsigned long");
+    CHECK(type_name<short>() == "int16_t");
+    CHECK(type_name<long>() == "int64_t");
+    CHECK(type_name<unsigned short>() == "uint16_t");
+    CHECK(type_name<unsigned long>() == "uint64_t");
     CHECK(type_name<float>() == "float");
   }
 
   SECTION("const and volatile") {
-    CHECK(type_name<const int>() == "const int");
-    CHECK(type_name<volatile int>() == "volatile int");
+    CHECK(type_name<const int>() == "const int32_t");
+    CHECK(type_name<volatile int>() == "volatile int32_t");
   }
 
   SECTION("references") {
-    CHECK(type_name<int&>() == "int&");
-    CHECK(type_name<const int&>() == "const int&");
+    CHECK(type_name<int&>() == "int32_t&");
+    CHECK(type_name<const int&>() == "const int32_t&");
   }
 
   SECTION("pointers") {
-    CHECK(type_name<int*>() == "int*");
-    CHECK(type_name<int** const*>() == "int** const*");
-    CHECK(type_name<const int*>() == "const int*");
-    CHECK(type_name<int* const>() == "int* const");
-    CHECK(type_name<const int* const>() == "const int* const");
+    CHECK(type_name<int*>() == "int32_t*");
+    CHECK(type_name<int** const*>() == "int32_t** const*");
+    CHECK(type_name<const int*>() == "const int32_t*");
+    CHECK(type_name<int* const>() == "int32_t* const");
+    CHECK(type_name<const int* const>() == "const int32_t* const");
   }
 
   SECTION("common STL types") {
     CHECK(type_name<std::string>() == "std::string");
-    CHECK(type_name<std::vector<int>>() == "std::vector<int>");
-    CHECK(type_name<std::vector<const int*>>() == "std::vector<const int*>");
+    CHECK(type_name<std::vector<int>>() == "std::vector<int32_t>");
+    CHECK(type_name<std::vector<const int*>>() ==
+          "std::vector<const int32_t*>");
     CHECK(type_name<std::vector<std::vector<int>>>() ==
-          "std::vector<std::vector<int>>");
+          "std::vector<std::vector<int32_t>>");
   }
 
 #if !defined(DBG_MACRO_WINDOWS)
   SECTION("std::tuple") {
     CHECK(type_name<std::tuple<>>() == "std::tuple<>");
-    CHECK(type_name<std::tuple<int, char>>() == "std::tuple<int, char>");
+    CHECK(type_name<std::tuple<int, char>>() == "std::tuple<int32_t, char>");
     CHECK(type_name<std::tuple<std::string, char>>() ==
           "std::tuple<std::string, char>");
   }

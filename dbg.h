@@ -26,18 +26,13 @@ License (MIT):
 
 *****************************************************************************/
 
-#ifndef DBG_MACRO_DBG_H
-#define DBG_MACRO_DBG_H
+#pragma once
 
 #if defined(__unix__) || (defined(__APPLE__) && defined(__MACH__))
 #define DBG_MACRO_UNIX
 #elif defined(_MSC_VER)
 #define DBG_MACRO_WINDOWS
 #endif
-
-#ifndef DBG_MACRO_NO_WARNING
-#pragma message("WARNING: the 'dbg.h' header is included in your code base")
-#endif  // DBG_MACRO_NO_WARNING
 
 #include <algorithm>
 #include <chrono>
@@ -46,40 +41,35 @@ License (MIT):
 #include <ios>
 #include <iostream>
 #include <memory>
+#include <optional>
+#include <queue>
 #include <sstream>
+#include <stack>
 #include <string>
 #include <tuple>
 #include <type_traits>
+#include <variant>
 #include <vector>
 
 #ifdef DBG_MACRO_UNIX
 #include <unistd.h>
 #endif
 
-#if __cplusplus >= 201703L
-#define DBG_MACRO_CXX_STANDARD 17
-#elif __cplusplus >= 201402L
-#define DBG_MACRO_CXX_STANDARD 14
-#else
-#define DBG_MACRO_CXX_STANDARD 11
-#endif
-
-#if DBG_MACRO_CXX_STANDARD >= 17
-#include <optional>
-#include <variant>
+#if __cplusplus < 201703L
+#error "dbg.h should be compiled with -std=c++17 or above"
 #endif
 
 namespace dbg {
 
-#ifdef DBG_MACRO_UNIX
 inline bool isColorizedOutputEnabled() {
-  return isatty(fileno(stderr));
-}
-#else
-inline bool isColorizedOutputEnabled() {
+#if defined(DBG_MACRO_FORCE_COLOR)
   return true;
-}
+#elif defined(DBG_MACRO_UNIX)
+  return isatty(fileno(stderr));
+#else
+  return true;
 #endif
+}
 
 struct time {};
 
@@ -113,8 +103,7 @@ static constexpr size_t SUFFIX_LENGTH = sizeof(">(void)") - 1;
 
 template <typename T>
 struct print_formatted {
-  static_assert(std::is_integral<T>::value,
-                "Only integral types are supported.");
+  static_assert(std::is_integral_v<T>, "Only integral types are supported.");
 
   print_formatted(T value, int numeric_base)
       : inner(value), base(numeric_base) {}
@@ -174,51 +163,44 @@ std::string get_type_name(type_tag<T>) {
 
 template <typename T>
 std::string type_name() {
-  if (std::is_volatile<T>::value) {
-    if (std::is_pointer<T>::value) {
-      return type_name<typename std::remove_volatile<T>::type>() + " volatile";
+  if (std::is_volatile_v<T>) {
+    if (std::is_pointer_v<T>) {
+      return type_name<std::remove_volatile_t<T>>() + " volatile";
     } else {
-      return "volatile " + type_name<typename std::remove_volatile<T>::type>();
+      return "volatile " + type_name<std::remove_volatile_t<T>>();
     }
   }
-  if (std::is_const<T>::value) {
-    if (std::is_pointer<T>::value) {
-      return type_name<typename std::remove_const<T>::type>() + " const";
+  if (std::is_const_v<T>) {
+    if (std::is_pointer_v<T>) {
+      return type_name<std::remove_const_t<T>>() + " const";
     } else {
-      return "const " + type_name<typename std::remove_const<T>::type>();
+      return "const " + type_name<std::remove_const_t<T>>();
     }
   }
-  if (std::is_pointer<T>::value) {
-    return type_name<typename std::remove_pointer<T>::type>() + "*";
+  if (std::is_pointer_v<T>) {
+    return type_name<std::remove_pointer_t<T>>() + "*";
   }
-  if (std::is_lvalue_reference<T>::value) {
-    return type_name<typename std::remove_reference<T>::type>() + "&";
+  if (std::is_lvalue_reference_v<T>) {
+    return type_name<std::remove_reference_t<T>>() + "&";
   }
-  if (std::is_rvalue_reference<T>::value) {
-    return type_name<typename std::remove_reference<T>::type>() + "&&";
+  if (std::is_rvalue_reference_v<T>) {
+    return type_name<std::remove_reference_t<T>>() + "&&";
   }
   return get_type_name(type_tag<T>{});
 }
 
-inline std::string get_type_name(type_tag<short>) {
-  return "short";
-}
+#define DBG_MACRO_REGISTER_SIMPLE_TYPE_NAME(type) \
+  inline std::string get_type_name(type_tag<type>) { return #type; }
 
-inline std::string get_type_name(type_tag<unsigned short>) {
-  return "unsigned short";
-}
-
-inline std::string get_type_name(type_tag<long>) {
-  return "long";
-}
-
-inline std::string get_type_name(type_tag<unsigned long>) {
-  return "unsigned long";
-}
-
-inline std::string get_type_name(type_tag<std::string>) {
-  return "std::string";
-}
+DBG_MACRO_REGISTER_SIMPLE_TYPE_NAME(uint8_t)
+DBG_MACRO_REGISTER_SIMPLE_TYPE_NAME(uint16_t)
+DBG_MACRO_REGISTER_SIMPLE_TYPE_NAME(uint32_t)
+DBG_MACRO_REGISTER_SIMPLE_TYPE_NAME(uint64_t)
+DBG_MACRO_REGISTER_SIMPLE_TYPE_NAME(int8_t)
+DBG_MACRO_REGISTER_SIMPLE_TYPE_NAME(int16_t)
+DBG_MACRO_REGISTER_SIMPLE_TYPE_NAME(int32_t)
+DBG_MACRO_REGISTER_SIMPLE_TYPE_NAME(int64_t)
+DBG_MACRO_REGISTER_SIMPLE_TYPE_NAME(std::string)
 
 template <typename T>
 std::string get_type_name(type_tag<std::vector<T, std::allocator<T>>>) {
@@ -236,11 +218,7 @@ std::string type_list_to_string() {
   auto unused = {(result += type_name<T>() + ", ", 0)..., 0};
   static_cast<void>(unused);
 
-#if DBG_MACRO_CXX_STANDARD >= 17
   if constexpr (sizeof...(T) > 0) {
-#else
-  if (sizeof...(T) > 0) {
-#endif
     result.pop_back();
     result.pop_back();
   }
@@ -293,24 +271,46 @@ template <template <class...> class Op, class... Args>
 using is_detected = typename detail_detector::
     detector<detail_detector::nonesuch, void, Op, Args...>::value_t;
 
+template <template <class...> class Op, class... Args>
+constexpr inline bool is_detected_v = is_detected<Op, Args...>::value;
+
 namespace detail {
 
 namespace {
 using std::begin;
 using std::end;
-#if DBG_MACRO_CXX_STANDARD < 17
-template <typename T>
-constexpr auto size(const T& c) -> decltype(c.size()) {
-  return c.size();
-}
-template <typename T, std::size_t N>
-constexpr std::size_t size(const T (&)[N]) {
-  return N;
-}
-#else
 using std::size;
-#endif
 }  // namespace
+
+// Specializations for container adapters
+
+template <class T, class C>
+T pop(std::stack<T, C>& adapter) {
+  T value = std::move(adapter.top());
+  adapter.pop();
+  return value;
+}
+
+template <class T, class C>
+T pop(std::queue<T, C>& adapter) {
+  T value = std::move(adapter.front());
+  adapter.pop();
+  return value;
+}
+
+template <class T, class C, class Cmp>
+T pop(std::priority_queue<T, C, Cmp>& adapter) {
+  T value = std::move(adapter.top());
+  adapter.pop();
+  return value;
+}
+
+template <typename T>
+struct remove_cvref {
+  typedef std::remove_cv_t<std::remove_reference_t<T>> type;
+};
+template <typename T>
+using remove_cvref_t = typename remove_cvref<T>::type;
 
 template <typename T>
 using detect_begin_t = decltype(detail::begin(std::declval<T>()));
@@ -323,14 +323,26 @@ using detect_size_t = decltype(detail::size(std::declval<T>()));
 
 template <typename T>
 struct is_container {
-  static constexpr bool value =
-      is_detected<detect_begin_t, T>::value &&
-      is_detected<detect_end_t, T>::value &&
-      is_detected<detect_size_t, T>::value &&
-      !std::is_same<std::string,
-                    typename std::remove_cv<
-                        typename std::remove_reference<T>::type>::type>::value;
+  static constexpr bool value = is_detected_v<detect_begin_t, T> &&
+                                is_detected_v<detect_end_t, T> &&
+                                is_detected_v<detect_size_t, T> &&
+                                !std::is_same_v<std::string, remove_cvref_t<T>>;
 };
+
+template <typename T>
+constexpr inline bool is_container_v = is_container<T>::value;
+
+template <typename T>
+using detect_underlying_container_t =
+    typename remove_cvref_t<T>::container_type;
+
+template <typename T>
+struct is_container_adapter {
+  static constexpr bool value = is_detected_v<detect_underlying_container_t, T>;
+};
+
+template <typename T>
+constexpr inline bool is_container_adapter_v = is_container_adapter<T>::value;
 
 template <typename T>
 using ostream_operator_t =
@@ -359,9 +371,10 @@ template <typename T>
 inline void pretty_print(std::ostream&, const T&, std::false_type);
 
 template <typename T>
-inline typename std::enable_if<!detail::is_container<const T&>::value &&
-                                   !std::is_enum<T>::value,
-                               bool>::type
+inline std::enable_if_t<!detail::is_container_v<const T&> &&
+                            !detail::is_container_adapter_v<const T&> &&
+                            !std::is_enum_v<T>,
+                        bool>
 pretty_print(std::ostream& stream, const T& value);
 
 inline bool pretty_print(std::ostream& stream, const bool& value);
@@ -394,28 +407,22 @@ template <>
 inline bool pretty_print(std::ostream& stream, const time&);
 
 template <typename T>
-inline bool pretty_print(std::ostream& stream,
-                         const print_formatted<T>& value);
+inline bool pretty_print(std::ostream& stream, const print_formatted<T>& value);
 
 template <typename T>
 inline bool pretty_print(std::ostream& stream, const print_type<T>&);
 
 template <typename Enum>
-inline typename std::enable_if<std::is_enum<Enum>::value, bool>::type
-pretty_print(std::ostream& stream, Enum const& value);
+inline std::enable_if_t<std::is_enum_v<Enum>, bool> pretty_print(
+    std::ostream& stream,
+    Enum const& value);
 
 inline bool pretty_print(std::ostream& stream, const std::string& value);
 
-#if DBG_MACRO_CXX_STANDARD >= 17
-
 inline bool pretty_print(std::ostream& stream, const std::string_view& value);
-
-#endif
 
 template <typename T1, typename T2>
 inline bool pretty_print(std::ostream& stream, const std::pair<T1, T2>& value);
-
-#if DBG_MACRO_CXX_STANDARD >= 17
 
 template <typename T>
 inline bool pretty_print(std::ostream& stream, const std::optional<T>& value);
@@ -424,12 +431,14 @@ template <typename... Ts>
 inline bool pretty_print(std::ostream& stream,
                          const std::variant<Ts...>& value);
 
-#endif
-
 template <typename Container>
-inline typename std::enable_if<detail::is_container<const Container&>::value,
-                               bool>::type
+inline std::enable_if_t<detail::is_container_v<const Container&>, bool>
 pretty_print(std::ostream& stream, const Container& value);
+
+template <typename ContainerAdapter>
+inline std::enable_if_t<detail::is_container_adapter_v<const ContainerAdapter&>,
+                        bool>
+pretty_print(std::ostream& stream, ContainerAdapter value);
 
 // Specializations of "pretty_print"
 
@@ -445,9 +454,10 @@ inline void pretty_print(std::ostream&, const T&, std::false_type) {
 }
 
 template <typename T>
-inline typename std::enable_if<!detail::is_container<const T&>::value &&
-                                   !std::is_enum<T>::value,
-                               bool>::type
+inline std::enable_if_t<!detail::is_container_v<const T&> &&
+                            !detail::is_container_adapter_v<const T&> &&
+                            !std::is_enum_v<T>,
+                        bool>
 pretty_print(std::ostream& stream, const T& value) {
   pretty_print(stream, value,
                typename detail::has_ostream_operator<const T&>::type{});
@@ -594,7 +604,7 @@ inline bool pretty_print(std::ostream& stream,
       // The '+' sign makes sure that a uint_8 is printed as a number
       stream << +value.inner;
     } else {
-      using unsigned_type = typename std::make_unsigned<T>::type;
+      using unsigned_type = std::make_unsigned_t<T>;
       stream << +(static_cast<unsigned_type>(-(value.inner + 1)) + 1);
     }
   } else {
@@ -602,7 +612,7 @@ inline bool pretty_print(std::ostream& stream,
     if (value.inner >= 0) {
       stream << decimalToBinary(value.inner);
     } else {
-      using unsigned_type = typename std::make_unsigned<T>::type;
+      using unsigned_type = std::make_unsigned_t<T>;
       stream << decimalToBinary<unsigned_type>(
           static_cast<unsigned_type>(-(value.inner + 1)) + 1);
     }
@@ -618,14 +628,14 @@ inline bool pretty_print(std::ostream& stream, const print_type<T>&) {
   stream << " [sizeof: " << sizeof(T) << " byte, ";
 
   stream << "trivial: ";
-  if (std::is_trivial<T>::value) {
+  if (std::is_trivial_v<T>) {
     stream << "yes";
   } else {
     stream << "no";
   }
 
   stream << ", standard layout: ";
-  if (std::is_standard_layout<T>::value) {
+  if (std::is_standard_layout_v<T>) {
     stream << "yes";
   } else {
     stream << "no";
@@ -636,9 +646,10 @@ inline bool pretty_print(std::ostream& stream, const print_type<T>&) {
 }
 
 template <typename Enum>
-inline typename std::enable_if<std::is_enum<Enum>::value, bool>::type
-pretty_print(std::ostream& stream, Enum const& value) {
-  using UnderlyingType = typename std::underlying_type<Enum>::type;
+inline std::enable_if_t<std::is_enum_v<Enum>, bool> pretty_print(
+    std::ostream& stream,
+    Enum const& value) {
+  using UnderlyingType = std::underlying_type_t<Enum>;
   stream << static_cast<UnderlyingType>(value);
 
   return true;
@@ -649,14 +660,10 @@ inline bool pretty_print(std::ostream& stream, const std::string& value) {
   return true;
 }
 
-#if DBG_MACRO_CXX_STANDARD >= 17
-
 inline bool pretty_print(std::ostream& stream, const std::string_view& value) {
   stream << '"' << std::string(value) << '"';
   return true;
 }
-
-#endif
 
 template <typename T1, typename T2>
 inline bool pretty_print(std::ostream& stream, const std::pair<T1, T2>& value) {
@@ -667,8 +674,6 @@ inline bool pretty_print(std::ostream& stream, const std::pair<T1, T2>& value) {
   stream << "}";
   return true;
 }
-
-#if DBG_MACRO_CXX_STANDARD >= 17
 
 template <typename T>
 inline bool pretty_print(std::ostream& stream, const std::optional<T>& value) {
@@ -693,11 +698,8 @@ inline bool pretty_print(std::ostream& stream,
   return true;
 }
 
-#endif
-
 template <typename Container>
-inline typename std::enable_if<detail::is_container<const Container&>::value,
-                               bool>::type
+inline std::enable_if_t<detail::is_container_v<const Container&>, bool>
 pretty_print(std::ostream& stream, const Container& value) {
   stream << "{";
   const size_t size = detail::size(value);
@@ -707,6 +709,29 @@ pretty_print(std::ostream& stream, const Container& value) {
   using std::end;
   for (auto it = begin(value); it != end(value) && i < n; ++it, ++i) {
     pretty_print(stream, *it);
+    if (i != n - 1) {
+      stream << ", ";
+    }
+  }
+
+  if (size > n) {
+    stream << ", ...";
+    stream << " size:" << size;
+  }
+
+  stream << "}";
+  return true;
+}
+
+template <typename ContainerAdapter>
+inline std::enable_if_t<detail::is_container_adapter_v<const ContainerAdapter&>,
+                        bool>
+pretty_print(std::ostream& stream, ContainerAdapter value) {
+  stream << "{";
+  const size_t size = detail::size(value);
+  const size_t n = std::min(size_t{10}, size);
+  for (size_t i = 0; i < n; ++i) {
+    pretty_print(stream, detail::pop(value));
     if (i != n - 1) {
       stream << ", ";
     }
@@ -896,4 +921,3 @@ auto identity(T&&, U&&... u) -> last_t<U...> {
 #define dbg(...) dbg::identity(__VA_ARGS__)
 #endif  // DBG_MACRO_DISABLE
 
-#endif  // DBG_MACRO_DBG_H
